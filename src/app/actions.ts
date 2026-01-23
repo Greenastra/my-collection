@@ -35,24 +35,15 @@ export async function createFolder(parentPath: string, formData: FormData) {
   const newPath = parentPath ? `${parentPath}/${folderName}` : folderName;
   const sysPath = path.join(process.cwd(), 'public', 'badges', newPath);
 
-  // 1. Создаем физическую папку
   if (!fs.existsSync(sysPath)) {
     fs.mkdirSync(sysPath, { recursive: true });
   }
-
-  // 2. Добавляем запись в базу (чтобы она появилась в дереве)
-  // Мы используем хитрость: добавляем пустую запись с этим путем, чтобы дерево ее увидело
-  // В идеале дерево строится по badges, но пока папка пустая, её не видно. 
-  // Мы можем создать "значок-заглушку" или просто обновлять метаданные.
-  // Для простоты сейчас: просто обновляем путь.
   
   revalidatePath('/admin');
   redirect(`/admin?tab=catalog&path=${encodeURIComponent(newPath)}`);
 }
 
 export async function deleteFolder(folderPath: string) {
-  // В целях безопасности пока удаляем только из базы данных записи о значках
-  // Физическое удаление папки с файлами - опасная операция
   db.prepare("DELETE FROM badges WHERE folder_path = ?").run(folderPath);
   db.prepare("DELETE FROM folder_meta WHERE folder_path = ?").run(folderPath);
   
@@ -71,16 +62,20 @@ export async function saveFolderMeta(folderPath: string, formData: FormData) {
   revalidatePath('/admin', 'layout');
 }
 
-// --- ЗАГРУЗКА ФАЙЛОВ ---
+// --- ЗАГРУЗКА ФАЙЛОВ (ПРАВИЛО ХРОНОЛОГИИ) ---
 export async function uploadImage(formData: FormData) {
   const file = formData.get('file') as File;
   if (!file || file.size === 0) return null;
 
-  const buffer = Buffer.from(await file.arrayBuffer());
-  const filename = `${Date.now()}-${file.name.replace(/\s/g, '_')}`; // Уникальное имя
-  const uploadDir = path.join(process.cwd(), 'public', 'uploads');
+  // Правило хронологии: берем максимальный ID из базы и прибавляем 1
+  const lastBadge = db.prepare("SELECT MAX(id) as maxId FROM badges").get() as { maxId: number };
+  const nextNumber = (lastBadge?.maxId || 0) + 1;
   
-  // Создаем папку uploads если нет
+  const buffer = Buffer.from(await file.arrayBuffer());
+  const ext = path.extname(file.name).toLowerCase() || '.jpg';
+  const filename = `${nextNumber}${ext}`; // Новое имя файла - это просто номер
+  
+  const uploadDir = path.join(process.cwd(), 'public', 'uploads');
   if (!fs.existsSync(uploadDir)) {
     fs.mkdirSync(uploadDir, { recursive: true });
   }
@@ -117,6 +112,7 @@ export async function deleteBadge(id: number) {
 }
 
 export async function createBadge(folderPath: string, formData: FormData) {
+  // При создании черновика тоже можно сразу зарезервировать номер, но мы сделаем это при сохранении
   const name = "Новый значок";
   const insert = db.prepare(`
     INSERT INTO badges (name, folder_path, image_path) VALUES (?, ?, '/poster.jpg')

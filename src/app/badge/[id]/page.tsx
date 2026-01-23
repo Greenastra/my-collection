@@ -1,8 +1,9 @@
-import Image from 'next/image'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
+import { Suspense } from 'react'
 // @ts-ignore
 import db from '@/lib/db'
+import Loading from './loading'
 
 type TreeNode = { [key: string]: TreeNode };
 interface Badge {
@@ -15,40 +16,48 @@ interface Badge {
   description?: string;
 }
 
-export default async function BadgePage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
+// 1. ОСНОВНОЙ КОМПОНЕНТ-ОБЕРТКА
+// Используем Suspense с key={id}, чтобы принудительно вызывать loading.tsx при смене значка
+export default async function BadgePage(props: { params: Promise<{ id: string }> }) {
+  const { id } = await props.params;
 
-  // --- ВАЖНОЕ ИСПРАВЛЕНИЕ: Микро-пауза для показа loading.tsx ---
+  return (
+    <Suspense key={id} fallback={<Loading />}>
+      <BadgeContent id={id} />
+    </Suspense>
+  );
+}
+
+// 2. КОМПОНЕНТ С ЛОГИКОЙ И ВЕРСТКОЙ
+async function BadgeContent({ id }: { id: string }) {
+  // Микро-пауза для демонстрации плавности перехода (можно убрать в финале)
   await new Promise(resolve => setTimeout(resolve, 0));
-  // -------------------------------------------------------------
 
   let badge: Badge | undefined;
   try {
     const stmt = db.prepare("SELECT * FROM badges WHERE id = ?");
     badge = stmt.get(id) as Badge;
-  } catch (error) { console.error("Ошибка БД:", error); }
+  } catch (error) { 
+    console.error("Ошибка БД:", error); 
+  }
 
   if (!badge) notFound();
 
-  // Определяем активный раздел и пути
   const pathParts = badge.folder_path ? badge.folder_path.split('/') : [];
   const activeSection = pathParts[0] || '';
   const backLink = `/catalog/${badge.folder_path}`;
 
-  // --- ЛОГИКА "СОСЕДЕЙ" (Вперед/Назад) ---
+  // --- ЛОГИКА "СОСЕДЕЙ" ---
   let prevBadgeId: number | null = null;
   let nextBadgeId: number | null = null;
   try {
     const prev = db.prepare("SELECT id FROM badges WHERE folder_path = ? AND name < ? ORDER BY name DESC LIMIT 1").get(badge.folder_path, badge.name) as { id: number };
     const next = db.prepare("SELECT id FROM badges WHERE folder_path = ? AND name > ? ORDER BY name ASC LIMIT 1").get(badge.folder_path, badge.name) as { id: number };
-    
     if (prev) prevBadgeId = prev.id;
     if (next) nextBadgeId = next.id;
-  } catch (err) {
-    console.error("Ошибка поиска соседей:", err);
-  }
+  } catch (err) { console.error("Ошибка поиска соседей:", err); }
 
-  // --- СТРОИМ ДЕРЕВО КАТАЛОГА ---
+  // --- ДЕРЕВО КАТАЛОГА ---
   let tree: TreeNode = {};
   try {
     const rows = db.prepare("SELECT DISTINCT folder_path FROM badges").all() as { folder_path: string }[];
@@ -72,11 +81,9 @@ export default async function BadgePage({ params }: { params: Promise<{ id: stri
           const fullPathArr = [...parentPath, key];
           const fullPathStr = fullPathArr.join('/');
           const href = `/catalog/${fullPathStr}`;
-          
           const isActive = badge!.folder_path.startsWith(fullPathStr);
           const isExactCurrent = badge!.folder_path === fullPathStr;
           const hasChildren = Object.keys(nodes[key]).length > 0;
-
           return (
             <li key={key}>
               <div className="group">
@@ -102,8 +109,8 @@ export default async function BadgePage({ params }: { params: Promise<{ id: stri
   return (
     <main className="min-h-screen pb-10" style={{ backgroundColor: '#2e0a12', backgroundImage: 'repeating-linear-gradient(90deg, #2e0a12, #2e0a12 15px, #21050a 15px, #21050a 30px)' }}>
       <header className="w-full max-w-[1200px] mx-auto pt-4 relative z-10">
-        <div className="relative w-full h-[180px] md:h-[220px] border-b-4 border-[#cc0000] bg-[#21050a] shadow-lg">
-          <Image src="/banner.jpg" alt="ВЛКСМ Баннер" fill className="object-cover" priority />
+        <div className="relative w-full h-[180px] md:h-[220px] border-b-4 border-[#cc0000] bg-[#21050a] shadow-lg flex items-center justify-center overflow-hidden">
+          <img src="/banner.jpg" alt="ВЛКСМ Баннер" className="w-full h-full object-cover" />
         </div>
         <nav className="bg-[#1a0505] text-white py-2 px-4 flex flex-wrap gap-6 text-xl font-bold border-b border-[#333] shadow-md justify-center md:justify-start">
           <Link href="/" className="hover:text-[#ffcc00] hover:underline transition">Главная</Link>
@@ -129,29 +136,21 @@ export default async function BadgePage({ params }: { params: Promise<{ id: stri
         <section className="flex-1 bg-white rounded p-8 shadow-2xl relative">
           <div className="flex items-center justify-between border-b-2 border-[#eee] mb-6 pb-2">
             <h1 className="text-3xl font-serif font-bold text-[#800000]">{badge.name}</h1>
-            
             <div className="flex gap-2">
               {prevBadgeId ? (
                 <Link href={`/badge/${prevBadgeId}`} className="px-3 py-1 border border-gray-300 rounded hover:bg-[#ffcc00] hover:text-[#2e0a12] text-gray-700 font-bold transition">← Пред.</Link>
-              ) : (
-                <span className="px-3 py-1 border border-gray-100 rounded text-gray-300 cursor-not-allowed">← Пред.</span>
-              )}
-
+              ) : <span className="px-3 py-1 border border-gray-100 rounded text-gray-300 cursor-not-allowed">← Пред.</span>}
               <Link href={backLink} className="px-3 py-1 border border-gray-300 rounded bg-gray-50 hover:bg-gray-100 text-gray-700 font-bold transition">В папку</Link>
-
               {nextBadgeId ? (
                 <Link href={`/badge/${nextBadgeId}`} className="px-3 py-1 border border-gray-300 rounded hover:bg-[#ffcc00] hover:text-[#2e0a12] text-gray-700 font-bold transition">След. →</Link>
-              ) : (
-                <span className="px-3 py-1 border border-gray-100 rounded text-gray-300 cursor-not-allowed">След. →</span>
-              )}
+              ) : <span className="px-3 py-1 border border-gray-100 rounded text-gray-300 cursor-not-allowed">След. →</span>}
             </div>
           </div>
 
           <div className="flex flex-col xl:flex-row gap-8">
             <div className="w-full xl:w-1/2 bg-gray-50 border border-gray-200 rounded p-4 flex items-center justify-center shadow-inner min-h-[400px]">
-               <div className="relative w-full h-full min-h-[400px]">
-                 <Image src={badge.image_path} alt={badge.name} fill className="object-contain" />
-               </div>
+               {/* Используем обычный img для стабильности путей с кириллицей и пробелами */}
+               <img src={badge.image_path} alt={badge.name} className="max-w-full max-h-full object-contain shadow-md" />
             </div>
             <div className="w-full xl:w-1/2 space-y-6 text-lg">
               <div className="p-6 bg-gray-50 border-l-4 border-[#cc0000] shadow-sm">
