@@ -114,3 +114,29 @@ export async function deleteBadge(id: number) {
     console.error("Ошибка удаления:", error);
   }
 }
+// --- 4. СОЗДАНИЕ НОВОГО ЗНАЧКА ---
+export async function createBadge(formData: FormData) {
+  const name = formData.get('name') as string;
+  const folder_path = formData.get('folder_path') as string;
+  const image_path = formData.get('image_path') as string; // Здесь должен быть путь к загруженной картинке
+  const year = formData.get('year') as string;
+  const material = formData.get('material') as string;
+  const description = formData.get('description') as string;
+
+  try {
+    const stmt = db.prepare(`
+      INSERT INTO badges (name, folder_path, image_path, year, material, description)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `);
+    
+    stmt.run(name, folder_path, image_path, year, material, description);
+
+    revalidatePath('/admin');
+    revalidatePath(`/catalog/${folder_path}`);
+    
+    return { success: true, message: "Значок успешно добавлен!" };
+  } catch (error) {
+    console.error("Ошибка при создании значка:", error);
+    return { success: false, message: "Ошибка: возможно, такой путь к картинке уже существует." };
+  }
+}
