@@ -4,7 +4,7 @@ export default function Loading() {
       <div className="text-center">
         {/* Анимированное кольцо */}
         <div className="w-16 h-16 border-4 border-[#ffcc00] border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-        <p className="text-[#ffcc00] text-xl font-bold animate-pulse">Загрузка коллекции...</p>
+        <p className="text-[#ffcc00] text-xl font-bold animate-pulse">Загрузка. . .</p>
       </div>
     </div>
   )

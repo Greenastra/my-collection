@@ -49,6 +49,7 @@ next-env.d.ts
 
 public/badges
 public/uploads
+public/collection
 
 Игнорируем локальную базу данных (чтобы не перезатирать её при скачивании)
 

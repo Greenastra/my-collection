@@ -15,12 +15,30 @@ interface Badge {
   description?: string;
 }
 
+// --- ПОМОЩНИКИ (Те же, что и в каталоге) ---
+
+// Правильное кодирование пути для URL (русские буквы -> %D0...)
+const safeEncodePath = (path: string) => {
+  if (!path) return '';
+  return path.split('/').map(part => encodeURIComponent(part)).join('/');
+};
+
+// Исправление пути к картинке
+const normalizeImagePath = (dbPath: string) => {
+  if (!dbPath) return '/placeholder.png';
+  let cleanPath = dbPath;
+  // Добавляем слэш в начало, если его нет
+  if (!cleanPath.startsWith('/')) {
+    cleanPath = '/' + cleanPath;
+  }
+  return safeEncodePath(cleanPath);
+};
+
 export default async function BadgePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
 
-  // --- ВАЖНОЕ ИСПРАВЛЕНИЕ: Микро-пауза для показа loading.tsx ---
+  // Микро-пауза для показа loading.tsx
   await new Promise(resolve => setTimeout(resolve, 0));
-  // -------------------------------------------------------------
 
   let badge: Badge | undefined;
   try {
@@ -30,10 +48,15 @@ export default async function BadgePage({ params }: { params: Promise<{ id: stri
 
   if (!badge) notFound();
 
+  // Генерируем безопасный путь для картинки
+  const safeImageSrc = normalizeImagePath(badge.image_path);
+
   // Определяем активный раздел и пути
   const pathParts = badge.folder_path ? badge.folder_path.split('/') : [];
   const activeSection = pathParts[0] || '';
-  const backLink = `/catalog/${badge.folder_path}`;
+  
+  // Исправляем ссылку "В папку" (кодируем русские буквы)
+  const backLink = `/catalog/${safeEncodePath(badge.folder_path)}`;
 
   // --- ЛОГИКА "СОСЕДЕЙ" (Вперед/Назад) ---
   let prevBadgeId: number | null = null;
@@ -70,11 +93,13 @@ export default async function BadgePage({ params }: { params: Promise<{ id: stri
       <ul className="space-y-1 pl-2 border-l border-[#444] ml-1.5">
         {keys.map(key => {
           const fullPathArr = [...parentPath, key];
-          const fullPathStr = fullPathArr.join('/');
+          // Здесь тоже используем безопасное кодирование путей
+          const fullPathStr = safeEncodePath(fullPathArr.join('/'));
           const href = `/catalog/${fullPathStr}`;
           
-          const isActive = badge!.folder_path.startsWith(fullPathStr);
-          const isExactCurrent = badge!.folder_path === fullPathStr;
+          const rawPathStr = fullPathArr.join('/');
+          const isActive = badge!.folder_path.startsWith(rawPathStr);
+          const isExactCurrent = badge!.folder_path === rawPathStr;
           const hasChildren = Object.keys(nodes[key]).length > 0;
 
           return (
@@ -103,14 +128,14 @@ export default async function BadgePage({ params }: { params: Promise<{ id: stri
     <main className="min-h-screen pb-10" style={{ backgroundColor: '#2e0a12', backgroundImage: 'repeating-linear-gradient(90deg, #2e0a12, #2e0a12 15px, #21050a 15px, #21050a 30px)' }}>
       <header className="w-full max-w-[1200px] mx-auto pt-4 relative z-10">
         <div className="relative w-full h-[180px] md:h-[220px] border-b-4 border-[#cc0000] bg-[#21050a] shadow-lg">
-          <Image src="/banner.jpg" alt="ВЛКСМ Баннер" fill className="object-cover" priority />
+          <Image src="/banner.jpg" alt="ВЛКСМ Баннер" fill className="object-cover" priority unoptimized />
         </div>
         <nav className="bg-[#1a0505] text-white py-2 px-4 flex flex-wrap gap-6 text-xl font-bold border-b border-[#333] shadow-md justify-center md:justify-start">
           <Link href="/" className="hover:text-[#ffcc00] hover:underline transition">Главная</Link>
-          <Link href="/catalog/Региональный комсомол" className={`transition ${activeSection === 'Региональный комсомол' ? 'text-[#ffcc00] underline' : 'hover:text-[#ffcc00] hover:underline'}`}>Региональный комсомол</Link>
-          <Link href="/catalog/ССО" className={`transition ${activeSection === 'ССО' ? 'text-[#ffcc00] underline' : 'hover:text-[#ffcc00] hover:underline'}`}>ССО</Link>
-          <Link href="/catalog/ВЛКСМ" className={`transition ${activeSection === 'ВЛКСМ' ? 'text-[#ffcc00] underline' : 'hover:text-[#ffcc00] hover:underline'}`}>ВЛКСМ</Link>
-          <Link href="/catalog/Разное" className={`transition ${activeSection === 'Разное' ? 'text-[#ffcc00] underline' : 'hover:text-[#ffcc00] hover:underline'}`}>Разное</Link>
+          <Link href={`/catalog/${encodeURIComponent('Региональный комсомол')}`} className={`transition ${activeSection === 'Региональный комсомол' ? 'text-[#ffcc00] underline' : 'hover:text-[#ffcc00] hover:underline'}`}>Региональный комсомол</Link>
+          <Link href={`/catalog/${encodeURIComponent('ССО')}`} className={`transition ${activeSection === 'ССО' ? 'text-[#ffcc00] underline' : 'hover:text-[#ffcc00] hover:underline'}`}>ССО</Link>
+          <Link href={`/catalog/${encodeURIComponent('ВЛКСМ')}`} className={`transition ${activeSection === 'ВЛКСМ' ? 'text-[#ffcc00] underline' : 'hover:text-[#ffcc00] hover:underline'}`}>ВЛКСМ</Link>
+          <Link href={`/catalog/${encodeURIComponent('Разное')}`} className={`transition ${activeSection === 'Разное' ? 'text-[#ffcc00] underline' : 'hover:text-[#ffcc00] hover:underline'}`}>Разное</Link>
           <Link href="/contact" className="hover:text-[#ffcc00] hover:underline transition ml-auto">Контакты</Link>
         </nav>
       </header>
@@ -121,8 +146,9 @@ export default async function BadgePage({ params }: { params: Promise<{ id: stri
             <h2 className="text-[#ffcc00] font-bold text-lg mb-4 border-b border-[#5c1818] pb-2">КАТАЛОГ</h2>
             <div className="-ml-3"><RenderTree nodes={tree} parentPath={[]} /></div>
           </div>
-          <div className="bg-[#2a0a0a] p-3 border-2 border-[#3d1414] shadow-2xl">
-             <img src="/poster.jpg" alt="Плакат ВЛКСМ" className="w-full h-auto object-cover" />
+          <div className="bg-[#2a0a0a] p-3 border-2 border-[#3d1414] shadow-2xl relative w-full h-[400px]">
+             {/* unoptimized добавлен и сюда */}
+             <Image src="/poster.jpg" alt="Плакат ВЛКСМ" fill className="object-cover" unoptimized />
           </div>
         </aside>
 
@@ -150,7 +176,8 @@ export default async function BadgePage({ params }: { params: Promise<{ id: stri
           <div className="flex flex-col xl:flex-row gap-8">
             <div className="w-full xl:w-1/2 bg-gray-50 border border-gray-200 rounded p-4 flex items-center justify-center shadow-inner min-h-[400px]">
                <div className="relative w-full h-full min-h-[400px]">
-                 <Image src={badge.image_path} alt={badge.name} fill className="object-contain" />
+                 {/* ВАЖНО: Используем safeImageSrc и unoptimized */}
+                 <Image src={safeImageSrc} alt={badge.name} fill className="object-contain" unoptimized />
                </div>
             </div>
             <div className="w-full xl:w-1/2 space-y-6 text-lg">
