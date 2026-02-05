@@ -4,6 +4,7 @@ import { useState } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
+import AddBadgeForm from './AddBadgeForm';
 // 1. Добавили createBadge в импорт
 import { updateBadge, createBadge } from '@/app/actions'
 
@@ -73,6 +74,9 @@ export default function AdminDashboard({
 
       {/* ОСНОВНАЯ ОБЛАСТЬ */}
       <main className="flex-1 overflow-y-auto p-8 relative">
+        {currentFolder && (
+  <AddBadgeForm currentFolder={currentFolder} onCreated={() => router.refresh()} />
+)}
         <header className="mb-6 flex justify-between items-end border-b pb-4">
           <div>
             <h1 className="text-2xl font-bold text-gray-800">
